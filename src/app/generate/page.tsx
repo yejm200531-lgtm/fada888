@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Zap, Copy, Send, RefreshCw } from 'lucide-react';
+import { Zap, Copy, RefreshCw, CheckCircle } from 'lucide-react';
 
 const PLATFORMS = ['reddit', 'twitter', 'hackernews', 'producthunt', 'weibo'];
 const platformEmoji: Record<string, string> = {
@@ -17,6 +17,8 @@ type GeneratedItem = {
   content: string;
 };
 
+type PublishStatus = 'idle' | 'generating' | 'publishing' | 'done';
+
 export default function GeneratePage() {
   const [topic, setTopic] = useState('');
   const [description, setDescription] = useState('');
@@ -24,8 +26,8 @@ export default function GeneratePage() {
   const [language, setLanguage] = useState('zh');
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['reddit', 'twitter']);
   const [results, setResults] = useState<GeneratedItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [publishing, setPublishing] = useState<string | null>(null);
+  const [publishResults, setPublishResults] = useState<Record<string, 'success' | 'failed'>>({});
+  const [status, setStatus] = useState<PublishStatus>('idle');
   const [copied, setCopied] = useState<string | null>(null);
 
   function togglePlatform(p: string) {
@@ -34,61 +36,74 @@ export default function GeneratePage() {
     );
   }
 
-  async function generate() {
-    if (!topic.trim() || selectedPlatforms.length === 0) return;
-    setLoading(true);
+  async function generateAndPublish() {
+    if (!topic.trim() || !selectedPlatforms.length) return;
+
+    setStatus('generating');
     setResults([]);
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          description,
-          tone,
-          language,
-          platforms: selectedPlatforms,
-          save: false,
-        }),
-      });
-      const data = await res.json();
-      setResults(data.generated || []);
-    } finally {
-      setLoading(false);
-    }
-  }
+    setPublishResults({});
 
-  async function publishNow(item: GeneratedItem) {
-    setPublishing(item.platform);
-    try {
-      // Save and immediately publish
-      const saveRes = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          description,
-          tone,
-          language,
-          platforms: [item.platform],
-          save: false,
-        }),
-      });
-      const saved = await saveRes.json();
-      const generated = saved.generated?.[0];
-      if (!generated) return;
+    // Step 1: Generate
+    const genRes = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        topic,
+        description,
+        tone,
+        language,
+        platforms: selectedPlatforms,
+        save: false,
+      }),
+    });
+    const genData = await genRes.json();
+    const generated: GeneratedItem[] = genData.generated || [];
+    setResults(generated);
 
-      // Create post
-      const postRes = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'publish_direct', content: generated }),
-      });
-      await postRes.json();
-      alert(`已发布到 ${item.platform}！（模拟模式，如需真实发布请配置平台API）`);
-    } finally {
-      setPublishing(null);
-    }
+    // Step 2: Auto-publish all
+    setStatus('publishing');
+    const newResults: Record<string, 'success' | 'failed'> = {};
+
+    await Promise.all(
+      generated.map(async (item) => {
+        try {
+          // Save post to DB
+          const saveRes = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              topic,
+              description,
+              tone,
+              language,
+              platforms: [item.platform],
+              save: false,
+            }),
+          });
+          const saved = await saveRes.json();
+          const savedItem = saved.generated?.[0];
+          if (!savedItem) { newResults[item.platform] = 'failed'; return; }
+
+          // Create and immediately publish post
+          const postRes = await fetch('/api/posts/publish', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              platform: item.platform,
+              title: item.title,
+              content: item.content,
+            }),
+          });
+          const postData = await postRes.json();
+          newResults[item.platform] = postData.success ? 'success' : 'failed';
+        } catch {
+          newResults[item.platform] = 'failed';
+        }
+      })
+    );
+
+    setPublishResults(newResults);
+    setStatus('done');
   }
 
   function copyContent(item: GeneratedItem) {
@@ -98,11 +113,13 @@ export default function GeneratePage() {
     setTimeout(() => setCopied(null), 2000);
   }
 
+  const isRunning = status === 'generating' || status === 'publishing';
+
   return (
     <div className="p-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">快速生成</h1>
-        <p className="text-gray-500 mt-1">AI 一键生成多平台推广文案</p>
+        <h1 className="text-2xl font-bold text-gray-900">快速生成并发布</h1>
+        <p className="text-gray-500 mt-1">AI 生成文案后自动发布到所有选定平台，全程无需操作</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -117,9 +134,10 @@ export default function GeneratePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">推广主题 *</label>
                 <input
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="e.g. 我的开源工具 / 新产品发布"
+                  placeholder="e.g. 我的开源工具"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
+                  disabled={isRunning}
                 />
               </div>
 
@@ -131,6 +149,7 @@ export default function GeneratePage() {
                   placeholder="核心功能、受众、价值主张..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
+                  disabled={isRunning}
                 />
               </div>
 
@@ -141,6 +160,7 @@ export default function GeneratePage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={tone}
                     onChange={(e) => setTone(e.target.value)}
+                    disabled={isRunning}
                   >
                     <option value="engaging">吸引人</option>
                     <option value="professional">专业</option>
@@ -155,6 +175,7 @@ export default function GeneratePage() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
+                    disabled={isRunning}
                   >
                     <option value="zh">中文</option>
                     <option value="en">English</option>
@@ -169,8 +190,9 @@ export default function GeneratePage() {
                     <button
                       key={p}
                       type="button"
-                      onClick={() => togglePlatform(p)}
-                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                      onClick={() => !isRunning && togglePlatform(p)}
+                      disabled={isRunning}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border transition-colors disabled:opacity-50 ${
                         selectedPlatforms.includes(p)
                           ? 'bg-indigo-600 text-white border-indigo-600'
                           : 'bg-white text-gray-700 border-gray-300 hover:border-indigo-400'
@@ -182,15 +204,36 @@ export default function GeneratePage() {
                 </div>
               </div>
 
+              {/* Progress indicator */}
+              {isRunning && (
+                <div className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                  <div className="flex items-center gap-2 text-sm text-indigo-700">
+                    <RefreshCw size={14} className="animate-spin" />
+                    {status === 'generating' ? 'Claude 正在生成内容...' : '自动发布到各平台...'}
+                  </div>
+                </div>
+              )}
+
+              {status === 'done' && (
+                <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                  <div className="flex items-center gap-2 text-sm text-green-700">
+                    <CheckCircle size={14} />
+                    全部完成！内容已自动发布
+                  </div>
+                </div>
+              )}
+
               <button
-                onClick={generate}
-                disabled={loading || !topic.trim() || selectedPlatforms.length === 0}
+                onClick={generateAndPublish}
+                disabled={isRunning || !topic.trim() || !selectedPlatforms.length}
                 className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium transition-colors"
               >
-                {loading ? (
-                  <><RefreshCw size={16} className="animate-spin" /> 生成中...</>
+                {isRunning ? (
+                  <><RefreshCw size={16} className="animate-spin" />
+                    {status === 'generating' ? '生成中...' : '发布中...'}
+                  </>
                 ) : (
-                  <><Zap size={16} /> AI 生成文案</>
+                  <><Zap size={16} /> AI 生成并自动发布</>
                 )}
               </button>
             </CardContent>
@@ -199,73 +242,70 @@ export default function GeneratePage() {
 
         {/* Results */}
         <div className="lg:col-span-2 space-y-4">
-          {loading && (
-            <div className="flex items-center justify-center py-20">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mx-auto mb-4" />
-                <p className="text-gray-500 text-sm">Claude 正在为你生成内容...</p>
-              </div>
-            </div>
-          )}
-
-          {!loading && results.length === 0 && (
+          {status === 'idle' && (
             <div className="flex items-center justify-center py-20 text-gray-400">
               <div className="text-center">
                 <Zap size={48} className="mx-auto mb-4 opacity-30" />
-                <p>填写参数后点击"AI 生成文案"</p>
+                <p className="font-medium">填写参数后点击"AI 生成并自动发布"</p>
+                <p className="text-sm mt-1">一键完成 AI 生成 + 全平台自动发布</p>
               </div>
             </div>
           )}
 
-          {results.map((item) => (
-            <Card key={item.platform}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{platformEmoji[item.platform]}</span>
-                    <CardTitle>{item.platform}</CardTitle>
+          {results.map((item) => {
+            const pubResult = publishResults[item.platform];
+            return (
+              <Card key={item.platform} className={
+                pubResult === 'success' ? 'border-green-200' :
+                pubResult === 'failed' ? 'border-red-200' : ''
+              }>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xl">{platformEmoji[item.platform]}</span>
+                      <CardTitle>{item.platform}</CardTitle>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {pubResult === 'success' && (
+                        <Badge variant="success"><CheckCircle size={10} className="mr-1 inline" />已发布</Badge>
+                      )}
+                      {pubResult === 'failed' && (
+                        <Badge variant="danger">发布失败</Badge>
+                      )}
+                      {!pubResult && status === 'publishing' && (
+                        <Badge variant="info"><RefreshCw size={10} className="mr-1 inline animate-spin" />发布中</Badge>
+                      )}
+                      <button
+                        onClick={() => copyContent(item)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
+                      >
+                        <Copy size={12} />
+                        {copied === item.platform ? '已复制!' : '复制'}
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => copyContent(item)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
-                    >
-                      <Copy size={12} />
-                      {copied === item.platform ? '已复制!' : '复制'}
-                    </button>
-                    <button
-                      onClick={() => publishNow(item)}
-                      disabled={publishing === item.platform}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-                    >
-                      <Send size={12} />
-                      {publishing === item.platform ? '发布中...' : '立即发布'}
-                    </button>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {item.title && (
+                    <div className="mb-2">
+                      <Badge variant="info">标题</Badge>
+                      <p className="text-sm font-medium text-gray-900 mt-1">{item.title}</p>
+                    </div>
+                  )}
+                  {item.tagline && (
+                    <div className="mb-2">
+                      <Badge variant="purple">Tagline</Badge>
+                      <p className="text-sm text-gray-600 mt-1 italic">{item.tagline}</p>
+                    </div>
+                  )}
+                  <div className="bg-gray-50 rounded-lg p-3 mt-2">
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.content}</p>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {item.title && (
-                  <div className="mb-2">
-                    <Badge variant="info">标题</Badge>
-                    <p className="text-sm font-medium text-gray-900 mt-1">{item.title}</p>
-                  </div>
-                )}
-                {item.tagline && (
-                  <div className="mb-2">
-                    <Badge variant="purple">Tagline</Badge>
-                    <p className="text-sm text-gray-600 mt-1 italic">{item.tagline}</p>
-                  </div>
-                )}
-                <div className="bg-gray-50 rounded-lg p-3 mt-2">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{item.content}</p>
-                </div>
-                <p className="text-xs text-gray-400 mt-2">
-                  {item.content.length} 字符
-                </p>
-              </CardContent>
-            </Card>
-          ))}
+                  <p className="text-xs text-gray-400 mt-2">{item.content.length} 字符</p>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       </div>
     </div>

@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Play, Pause, Trash2, ChevronRight, Clock } from 'lucide-react';
+import { Plus, Play, Pause, Trash2, ChevronRight, Clock, Bot, Zap } from 'lucide-react';
+import Link from 'next/link';
 
 type Campaign = {
   id: string;
@@ -19,17 +20,36 @@ type Campaign = {
 };
 
 const PLATFORMS = ['reddit', 'twitter', 'hackernews', 'producthunt', 'weibo'];
-const TONES = ['engaging', 'professional', 'casual', 'humorous', 'informative'];
+const TONES = [
+  { value: 'engaging', label: '吸引人' },
+  { value: 'professional', label: '专业' },
+  { value: 'casual', label: '轻松' },
+  { value: 'humorous', label: '幽默' },
+  { value: 'informative', label: '信息丰富' },
+];
 const CRON_PRESETS = [
-  { label: '每小时', value: '0 * * * *' },
+  { label: '每30分钟', value: '*/30 * * * *' },
+  { label: '每1小时', value: '0 * * * *' },
+  { label: '每3小时', value: '0 */3 * * *' },
   { label: '每6小时', value: '0 */6 * * *' },
   { label: '每天上午9点', value: '0 9 * * *' },
-  { label: '每天两次', value: '0 9,18 * * *' },
-  { label: '每周一', value: '0 9 * * 1' },
+  { label: '每天两次 (9点/18点)', value: '0 9,18 * * *' },
+  { label: '每周一上午9点', value: '0 9 * * 1' },
 ];
 
 const platformEmoji: Record<string, string> = {
   reddit: '🤖', twitter: '🐦', hackernews: '🟠', producthunt: '🚀', weibo: '📱',
+};
+
+const defaultForm = {
+  name: '',
+  topic: '',
+  description: '',
+  tone: 'engaging',
+  language: 'zh',
+  platforms: [] as string[],
+  schedule_cron: '0 */6 * * *',
+  is_active: true,
 };
 
 export default function CampaignsPage() {
@@ -37,20 +57,9 @@ export default function CampaignsPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    topic: '',
-    description: '',
-    tone: 'engaging',
-    language: 'zh',
-    platforms: [] as string[],
-    schedule_cron: '',
-    is_active: false,
-  });
+  const [form, setForm] = useState(defaultForm);
 
-  useEffect(() => {
-    loadCampaigns();
-  }, []);
+  useEffect(() => { loadCampaigns(); }, []);
 
   async function loadCampaigns() {
     const res = await fetch('/api/campaigns');
@@ -67,7 +76,7 @@ export default function CampaignsPage() {
       body: JSON.stringify(form),
     });
     setShowForm(false);
-    setForm({ name: '', topic: '', description: '', tone: 'engaging', language: 'zh', platforms: [], schedule_cron: '', is_active: false });
+    setForm(defaultForm);
     await loadCampaigns();
     setSaving(false);
   }
@@ -81,8 +90,17 @@ export default function CampaignsPage() {
     await loadCampaigns();
   }
 
+  async function runNow(id: string) {
+    await fetch(`/api/campaigns/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'run_now' }),
+    });
+    await loadCampaigns();
+  }
+
   async function deleteCampaign(id: string) {
-    if (!confirm('确认删除此活动及所有相关帖子？')) return;
+    if (!confirm('确认删除此活动及所有帖子？')) return;
     await fetch(`/api/campaigns/${id}`, { method: 'DELETE' });
     await loadCampaigns();
   }
@@ -99,25 +117,35 @@ export default function CampaignsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">推广活动</h1>
-          <p className="text-gray-500 mt-1">管理自动推广任务</p>
+          <p className="text-gray-500 mt-1">创建后全程自动运行，无需人工操作</p>
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm font-medium"
         >
           <Plus size={16} />
           新建活动
         </button>
       </div>
 
+      {/* How it works */}
+      <div className="flex items-start gap-3 bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6">
+        <Bot className="text-indigo-500 shrink-0 mt-0.5" size={20} />
+        <div className="text-sm text-indigo-700">
+          <strong>全自动工作流：</strong>活动激活 → 立刻发第一批 → 按计划定时重复 → Claude 每次重新生成新内容 → 自动发布到所有平台
+          <br />
+          <span className="text-indigo-500">全程零人工干预，服务器重启后自动恢复。</span>
+        </div>
+      </div>
+
       {/* Create Form */}
       {showForm && (
-        <Card className="mb-6 border-indigo-200">
+        <Card className="mb-6 border-indigo-200 shadow-md">
           <CardHeader>
-            <CardTitle>新建推广活动</CardTitle>
+            <CardTitle>新建全自动推广活动</CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">活动名称 *</label>
@@ -134,7 +162,7 @@ export default function CampaignsPage() {
                   <input
                     required
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="e.g. 我的AI写作工具"
+                    placeholder="e.g. 我的 AI 写作工具"
                     value={form.topic}
                     onChange={(e) => setForm((f) => ({ ...f, topic: e.target.value }))}
                   />
@@ -142,11 +170,11 @@ export default function CampaignsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">详细描述</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">详细描述（越详细 AI 生成越精准）</label>
                 <textarea
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   rows={3}
-                  placeholder="产品特点、目标受众、核心价值..."
+                  placeholder="产品核心功能、目标受众、解决了什么问题、核心价值主张..."
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 />
@@ -154,13 +182,13 @@ export default function CampaignsPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">写作风格</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">AI 写作风格</label>
                   <select
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={form.tone}
                     onChange={(e) => setForm((f) => ({ ...f, tone: e.target.value }))}
                   >
-                    {TONES.map((t) => <option key={t} value={t}>{t}</option>)}
+                    {TONES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>
                 <div>
@@ -175,20 +203,23 @@ export default function CampaignsPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">定时计划</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <Clock size={12} className="inline mr-1" />
+                    自动运行频率 *
+                  </label>
                   <select
+                    required
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     value={form.schedule_cron}
                     onChange={(e) => setForm((f) => ({ ...f, schedule_cron: e.target.value }))}
                   >
-                    <option value="">手动发布</option>
                     {CRON_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">目标平台 *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">自动发布到哪些平台 *</label>
                 <div className="flex flex-wrap gap-2">
                   {PLATFORMS.map((p) => (
                     <button
@@ -207,29 +238,35 @@ export default function CampaignsPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                 <input
                   type="checkbox"
                   id="is_active"
                   checked={form.is_active}
                   onChange={(e) => setForm((f) => ({ ...f, is_active: e.target.checked }))}
-                  className="rounded"
+                  className="rounded accent-green-600 w-4 h-4"
                 />
-                <label htmlFor="is_active" className="text-sm text-gray-700">创建后立即启动</label>
+                <label htmlFor="is_active" className="text-sm text-green-800 font-medium">
+                  创建后立即启动 — 马上发第一批内容，之后按计划自动循环
+                </label>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex gap-3">
                 <button
                   type="submit"
-                  disabled={saving || form.platforms.length === 0}
-                  className="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
+                  disabled={saving || form.platforms.length === 0 || !form.schedule_cron}
+                  className="flex items-center gap-2 bg-indigo-600 text-white px-6 py-2.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm font-medium"
                 >
-                  {saving ? '创建中...' : '创建活动'}
+                  {saving ? (
+                    <><span className="animate-spin inline-block">⚡</span> 创建并启动中...</>
+                  ) : (
+                    <><Zap size={14} /> 创建并自动运行</>
+                  )}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowForm(false)}
-                  className="border border-gray-300 text-gray-700 px-6 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                  onClick={() => { setShowForm(false); setForm(defaultForm); }}
+                  className="border border-gray-300 text-gray-700 px-6 py-2.5 rounded-lg hover:bg-gray-50 text-sm"
                 >
                   取消
                 </button>
@@ -245,39 +282,49 @@ export default function CampaignsPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
         </div>
       ) : campaigns.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          <Megaphone size={48} className="mx-auto mb-4 opacity-30" />
-          <p>还没有推广活动，点击"新建活动"开始</p>
+        <div className="text-center py-20 text-gray-400">
+          <Bot size={56} className="mx-auto mb-4 opacity-20" />
+          <p className="text-lg font-medium">还没有推广活动</p>
+          <p className="text-sm mt-1">点击"新建活动"，一次设置，永远自动运行</p>
         </div>
       ) : (
         <div className="space-y-4">
           {campaigns.map((c) => (
-            <Card key={c.id} className="hover:shadow-md transition-shadow">
+            <Card key={c.id} className={`hover:shadow-md transition-shadow ${c.is_active ? 'border-green-200' : ''}`}>
               <CardContent className="p-5">
                 <div className="flex items-start gap-4">
+                  <div className={`w-2.5 h-2.5 rounded-full mt-2 shrink-0 ${c.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{c.name}</h3>
                       <Badge variant={c.is_active ? 'success' : 'default'}>
-                        {c.is_active ? '运行中' : '已暂停'}
+                        {c.is_active ? '🤖 自动运行中' : '已暂停'}
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-500 mb-3">{c.topic}</p>
                     <div className="flex items-center gap-3 flex-wrap">
                       {c.platforms.map((p) => (
-                        <span key={p} className="text-sm text-gray-600">
-                          {platformEmoji[p]} {p}
-                        </span>
+                        <span key={p} className="text-sm text-gray-600">{platformEmoji[p]} {p}</span>
                       ))}
                       {c.schedule_cron && (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <Clock size={12} />
+                        <span className="flex items-center gap-1 text-xs bg-gray-100 px-2 py-1 rounded-full text-gray-500">
+                          <Clock size={11} />
                           {CRON_PRESETS.find((x) => x.value === c.schedule_cron)?.label || c.schedule_cron}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {c.is_active && (
+                      <button
+                        onClick={() => runNow(c.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-100"
+                        title="立刻运行一次"
+                      >
+                        <Zap size={12} />
+                        立刻运行
+                      </button>
+                    )}
                     <button
                       onClick={() => toggleActive(c.id, c.is_active)}
                       className={`p-2 rounded-lg transition-colors ${
@@ -285,23 +332,22 @@ export default function CampaignsPage() {
                           ? 'bg-yellow-50 text-yellow-600 hover:bg-yellow-100'
                           : 'bg-green-50 text-green-600 hover:bg-green-100'
                       }`}
-                      title={c.is_active ? '暂停' : '启动'}
+                      title={c.is_active ? '暂停' : '启动（立刻运行）'}
                     >
                       {c.is_active ? <Pause size={16} /> : <Play size={16} />}
                     </button>
                     <button
                       onClick={() => deleteCampaign(c.id)}
                       className="p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
-                      title="删除"
                     >
                       <Trash2 size={16} />
                     </button>
-                    <a
+                    <Link
                       href={`/campaigns/${c.id}`}
                       className="p-2 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 transition-colors"
                     >
                       <ChevronRight size={16} />
-                    </a>
+                    </Link>
                   </div>
                 </div>
               </CardContent>
@@ -310,14 +356,5 @@ export default function CampaignsPage() {
         </div>
       )}
     </div>
-  );
-}
-
-function Megaphone({ size, className }: { size: number; className?: string }) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="m3 11 18-5v12L3 14v-3z"/>
-      <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/>
-    </svg>
   );
 }

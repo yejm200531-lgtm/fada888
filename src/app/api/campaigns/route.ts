@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import { startCampaignScheduler } from '@/lib/scheduler';
 import { v4 as uuidv4 } from 'uuid';
 
 export async function GET() {
@@ -36,6 +37,10 @@ export async function POST(req: NextRequest) {
     body.schedule_cron || null,
     body.is_active ? 1 : 0
   );
+
+  if (body.is_active) {
+    startCampaignScheduler(id, true); // runImmediately = true on creation
+  }
 
   const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id) as Record<string, unknown>;
   return NextResponse.json({

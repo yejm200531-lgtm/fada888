@@ -64,6 +64,18 @@ function initSchema(db: Database.Database) {
       recorded_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (post_id) REFERENCES posts(id)
     );
+
+    CREATE TABLE IF NOT EXISTS run_logs (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL,
+      trigger TEXT NOT NULL,
+      status TEXT NOT NULL,
+      message TEXT,
+      posts_created INTEGER DEFAULT 0,
+      posts_published INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (campaign_id) REFERENCES campaigns(id)
+    );
   `);
 }
 

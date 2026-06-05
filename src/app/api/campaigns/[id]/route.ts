@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
-import { startCampaignScheduler, stopCampaignScheduler } from '@/lib/scheduler';
+import { startCampaignScheduler, stopCampaignScheduler, runCampaign } from '@/lib/scheduler';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,11 +12,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .prepare('SELECT * FROM posts WHERE campaign_id = ? ORDER BY created_at DESC LIMIT 50')
     .all(id);
 
+  const logs = db
+    .prepare('SELECT * FROM run_logs WHERE campaign_id = ? ORDER BY created_at DESC LIMIT 20')
+    .all(id);
+
   return NextResponse.json({
     ...campaign,
     platforms: JSON.parse((campaign.platforms as string) || '[]'),
     is_active: Boolean(campaign.is_active),
     posts,
+    logs,
   });
 }
 
@@ -38,17 +43,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (body.is_active !== undefined) {
     updates.push('is_active = ?');
     values.push(body.is_active ? 1 : 0);
-    if (body.is_active) {
-      startCampaignScheduler(id);
-    } else {
-      stopCampaignScheduler(id);
-    }
   }
 
   updates.push("updated_at = datetime('now')");
   values.push(id);
 
   db.prepare(`UPDATE campaigns SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+
+  // Start/stop scheduler AFTER the DB update so it reads the fresh state
+  if (body.is_active === true) {
+    startCampaignScheduler(id, true); // runImmediately = true
+  } else if (body.is_active === false) {
+    stopCampaignScheduler(id);
+  }
+
+  // Handle manual trigger
+  if (body.action === 'run_now') {
+    runCampaign(id, 'manual');
+  }
 
   const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(id) as Record<string, unknown>;
   return NextResponse.json({
