@@ -37,6 +37,9 @@ yarn-error.log*
 # local database
 /data/
 
+# generated charts
+mingpan_*.html
+
 # vercel
 .vercel
 
