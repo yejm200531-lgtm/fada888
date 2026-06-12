@@ -1,0 +1,39 @@
+{
+  "name": "fada888",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node-cron": "^3.0.11",
+    "@types/snoowrap": "^1.16.1",
+    "@types/uuid": "^10.0.0",
+    "anthropic": "^0.0.0",
+    "better-sqlite3": "^12.10.0",
+    "date-fns": "^4.4.0",
+    "lucide-react": "^1.17.0",
+    "next": "16.2.7",
+    "node-cron": "^4.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "snoowrap": "^1.23.0",
+    "twitter-api-v2": "^1.29.0",
+    "uuid": "^14.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.7",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
