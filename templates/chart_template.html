@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>紫微斗数命盘</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #c9a84c;
+    --gold-dim: #a07830;
+    --crimson: #8b1a1a;
+    --crimson-bright: #c0392b;
+    --teal: #1a6b6b;
+    --teal-bright: #2aa198;
+    --ink: #0d0d12;
+    --ink-mid: #16161f;
+    --ink-light: #1e1e2a;
+    --ivory: #e8dfc8;
+    --ivory-dim: #b0a888;
+    --warn: #e67e22;
+    --good: #27ae60;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--ivory);
+    font-family: 'Noto Serif SC', serif;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(201,168,76,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 90%, rgba(139,26,26,0.08) 0%, transparent 50%);
+  }
+
+  .page-wrap { max-width: 960px; margin: 0 auto; padding: 32px 16px 64px; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    animation: fadeDown 0.6s ease both;
+  }
+  .header-title {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 2.4rem;
+    color: var(--gold);
+    letter-spacing: 0.18em;
+    text-shadow: 0 0 32px rgba(201,168,76,0.4);
+  }
+  .header-sub {
+    font-size: 0.85rem;
+    color: var(--ivory-dim);
+    letter-spacing: 0.12em;
+    margin-top: 6px;
+  }
+  .header-date {
+    font-size: 0.8rem;
+    color: var(--ivory-dim);
+    margin-top: 4px;
+    opacity: 0.7;
+  }
+
+  /* Info bar */
+  .info-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 28px;
+    animation: fadeDown 0.7s ease both;
+  }
+  .info-chip {
+    background: var(--ink-light);
+    border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.82rem;
+    color: var(--ivory-dim);
+  }
+  .info-chip strong { color: var(--gold); }
+
+  /* Palace grid */
+  .chart-section { margin-bottom: 40px; animation: fadeUp 0.7s ease 0.1s both; }
+  .section-title {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 1.1rem;
+    color: var(--gold-dim);
+    letter-spacing: 0.15em;
+    margin-bottom: 14px;
+    padding-left: 4px;
+    border-left: 3px solid var(--gold-dim);
+    padding-left: 10px;
+  }
+
+  .palace-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, auto);
+    gap: 4px;
+    position: relative;
+  }
+
+  .palace {
+    background: var(--ink-mid);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 6px;
+    padding: 10px 8px;
+    min-height: 110px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .palace:hover { border-color: rgba(201,168,76,0.3); }
+  .palace.active {
+    background: rgba(201,168,76,0.07);
+    border-color: var(--gold-dim);
+    box-shadow: inset 0 0 20px rgba(201,168,76,0.06);
+  }
+  .palace.current-limit {
+    border-color: var(--teal);
+    background: rgba(26,107,107,0.08);
+  }
+
+  .palace-center {
+    grid-column: 2 / 4;
+    grid-row: 2 / 4;
+    background: linear-gradient(135deg, rgba(201,168,76,0.08), rgba(139,26,26,0.08));
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+  }
+  .center-symbol {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 2.8rem;
+    color: var(--gold);
+    opacity: 0.8;
+    line-height: 1;
+  }
+  .center-label {
+    font-size: 0.75rem;
+    color: var(--ivory-dim);
+    letter-spacing: 0.15em;
+    text-align: center;
+  }
+
+  .palace-name {
+    font-size: 0.72rem;
+    color: var(--ivory-dim);
+    letter-spacing: 0.08em;
+    margin-bottom: 4px;
+  }
+  .palace-dizhi {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 1.1rem;
+    color: var(--gold);
+    margin-bottom: 6px;
+  }
+  .palace-stars { display: flex; flex-wrap: wrap; gap: 3px; }
+  .star {
+    font-size: 0.7rem;
+    background: rgba(255,255,255,0.05);
+    border-radius: 3px;
+    padding: 1px 5px;
+    color: var(--ivory);
+  }
+  .star.main {
+    color: var(--gold);
+    background: rgba(201,168,76,0.12);
+    font-weight: 500;
+    font-size: 0.78rem;
+  }
+  .star.four-hua {
+    color: var(--crimson-bright);
+    background: rgba(192,57,43,0.15);
+    font-size: 0.68rem;
+  }
+  .star.empty { color: var(--ivory-dim); opacity: 0.5; font-style: italic; }
+
+  .palace-badge {
+    position: absolute;
+    top: 6px; right: 6px;
+    font-size: 0.62rem;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-weight: 500;
+  }
+  .badge-ming { background: var(--gold); color: var(--ink); }
+  .badge-body { background: var(--crimson); color: var(--ivory); }
+  .badge-limit { background: var(--teal); color: var(--ivory); }
+
+  /* Four Hua tags */
+  .four-hua-bar {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    margin-bottom: 28px;
+    animation: fadeUp 0.7s ease 0.15s both;
+  }
+  .hua-tag {
+    font-size: 0.78rem;
+    border-radius: 4px;
+    padding: 3px 10px;
+    border: 1px solid;
+  }
+  .hua-lu { color: #2ecc71; border-color: rgba(46,204,113,0.4); background: rgba(46,204,113,0.08); }
+  .hua-quan { color: #e67e22; border-color: rgba(230,126,34,0.4); background: rgba(230,126,34,0.08); }
+  .hua-ke { color: #3498db; border-color: rgba(52,152,219,0.4); background: rgba(52,152,219,0.08); }
+  .hua-ji { color: #e74c3c; border-color: rgba(231,76,60,0.4); background: rgba(231,76,60,0.08); }
+
+  /* Reading cards */
+  .reading-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    animation: fadeUp 0.7s ease 0.2s both;
+  }
+  @media (max-width: 600px) { .reading-grid { grid-template-columns: 1fr; } }
+
+  .reading-card {
+    background: var(--ink-mid);
+    border: 1px solid rgba(201,168,76,0.12);
+    border-radius: 8px;
+    padding: 18px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .reading-card::before {
+    content: attr(data-num);
+    position: absolute;
+    top: -8px; right: 10px;
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 3.5rem;
+    color: rgba(201,168,76,0.06);
+    line-height: 1;
+    pointer-events: none;
+  }
+  .reading-card.full { grid-column: 1 / -1; }
+  .reading-card.highlight {
+    border-color: rgba(201,168,76,0.35);
+    background: rgba(201,168,76,0.04);
+  }
+  .reading-card.teal-highlight {
+    border-color: rgba(42,161,152,0.35);
+    background: rgba(42,161,152,0.04);
+  }
+
+  .card-title {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 1rem;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+  .card-stars-badge {
+    font-size: 0.72rem;
+    color: var(--ivory-dim);
+    margin-bottom: 10px;
+    letter-spacing: 0.05em;
+  }
+  .card-body {
+    font-size: 0.85rem;
+    line-height: 1.85;
+    color: var(--ivory);
+  }
+  .card-body strong { color: #fff; }
+  .card-body em { color: var(--gold); font-style: normal; }
+  .card-body .warn { color: var(--warn); }
+  .card-body .good { color: var(--good); }
+
+  /* Probability bars */
+  .prob-bar {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+  }
+  .prob-label { font-size: 0.72rem; color: var(--ivory-dim); width: 90px; flex-shrink: 0; }
+  .prob-track {
+    flex: 1; height: 4px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .prob-fill { height: 100%; background: var(--gold); border-radius: 2px; }
+  .prob-pct { font-size: 0.7rem; color: var(--gold); width: 34px; text-align: right; }
+
+  /* Hand section */
+  .hand-section { margin-bottom: 28px; animation: fadeUp 0.7s ease 0.25s both; }
+  .hand-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .hand-card {
+    background: var(--ink-mid);
+    border: 1px solid rgba(201,168,76,0.1);
+    border-radius: 6px;
+    padding: 12px;
+  }
+  .hand-card-title { font-size: 0.8rem; color: var(--gold); margin-bottom: 6px; }
+  .hand-card-body { font-size: 0.78rem; color: var(--ivory-dim); line-height: 1.7; }
+  .conflict-tag {
+    font-size: 0.7rem; border-radius: 3px; padding: 2px 7px;
+    display: inline-block; margin-top: 8px;
+  }
+  .conflict-tag.match { background: rgba(39,174,96,0.2); color: var(--good); }
+  .conflict-tag.conflict { background: rgba(231,76,60,0.2); color: #e74c3c; }
+
+  /* Calibration */
+  .calibration-section { animation: fadeUp 0.7s ease 0.3s both; }
+  .cal-disclaimer {
+    font-size: 0.75rem;
+    color: var(--ivory-dim);
+    margin-bottom: 14px;
+    opacity: 0.7;
+    line-height: 1.6;
+  }
+  .cal-q {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    background: var(--ink-mid);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 6px;
+  }
+  .cal-num {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 1rem;
+    color: var(--gold-dim);
+    flex-shrink: 0;
+    width: 20px;
+  }
+  .cal-text {
+    font-size: 0.83rem;
+    color: var(--ivory);
+    line-height: 1.7;
+  }
+  .cal-text span {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--ivory-dim);
+    margin-top: 2px;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    margin-top: 48px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(201,168,76,0.1);
+    font-size: 0.75rem;
+    color: var(--ivory-dim);
+    opacity: 0.5;
+    letter-spacing: 0.1em;
+    animation: fadeUp 0.7s ease 0.35s both;
+  }
+
+  /* Animations */
+  @keyframes fadeDown {
+    from { opacity: 0; transform: translateY(-16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-title">紫微斗数命盘</div>
+    <div class="header-sub">{{YEAR_STEM}}{{YEAR_BRANCH}}年 · {{HOUR_NAME}} · {{GENDER}}</div>
+    <div class="header-date">{{DATE_INFO}}　{{LUNAR_INFO}}</div>
+  </div>
+
+  <!-- Info bar -->
+  <div class="info-bar">
+    <div class="info-chip">五行局：<strong>{{FIVE_ELEMENTS}}</strong></div>
+    <div class="info-chip">命宫：<strong>{{SOUL_PALACE_BRANCH}}</strong></div>
+    <div class="info-chip">命主星：<strong>{{SOUL_PALACE_STARS}}</strong></div>
+    <div class="info-chip">当前大限：<strong>{{CURRENT_DECADAL}}</strong></div>
+  </div>
+
+  <!-- Palace grid -->
+  <div class="chart-section">
+    <div class="section-title">十二宫星曜分布</div>
+    <div class="palace-grid">
+      {{PALACE_CELLS}}
+      <div class="palace-center">
+        <div class="center-symbol">紫</div>
+        <div class="center-label">紫微斗数<br>命盘</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Four Hua -->
+  <div class="section-title">生年四化</div>
+  <div class="four-hua-bar">
+    {{FOUR_HUA_TAGS}}
+  </div>
+
+  <!-- Reading cards -->
+  <div class="chart-section">
+    <div class="section-title">命盘解读</div>
+    <div class="reading-grid">
+      {{READING_CARDS}}
+    </div>
+  </div>
+
+  <!-- Hand section (optional) -->
+  {{HAND_SECTION}}
+
+  <!-- Calibration -->
+  <div class="calibration-section">
+    <div class="section-title">校准问答</div>
+    <div class="cal-disclaimer">
+      当前盘准确度约 65-75%，通过以下问题的反馈可以提升至 85%+。<br>
+      请回答以下问题帮助校准（不需要全答，回答越多越准确）：
+    </div>
+    {{CALIBRATION_QUESTIONS}}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    命盘显示可能性，行动决定现实<br>
+    — 紫微斗数 · 概率地图，而非命运判决 —
+  </div>
+
+</div>
+</body>
+</html>
